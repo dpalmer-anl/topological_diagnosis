@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import time
+import haldane_model
 
 ###############################################################################
 # not needed anymore
@@ -38,7 +39,7 @@ def extract_floats(array):
     new_array=[]
     for element in array:
         try:
-            new_array.append(float(element))
+            new_array.append(complex(element))
         except:
             l=0 #array.remove(element)
     return new_array
@@ -102,6 +103,10 @@ def get_num_orbitals(line):
     num=line[ind_left+1:]
     return int(num)
 
+def get_dim(line):
+    ind_left=line.find(":")
+    num=line[ind_left+1:]
+    return int(num)
 
 def get_k_vect(filename):
     if not os.path.exists("kpoints"):
@@ -127,17 +132,22 @@ def get_output_arrays(filename):
     k_vect = np.array([0,0,0])
     overlap_k=[]
     ham_k=[]
+    dim=3
     # Open the file in read only mode
     f = open(filename, "r")
     f_list=f.readlines()
     for i,line in enumerate(f_list):
         # For each line, check if line contains the string
+        if "Dimensionality" in line:
+            dim=get_dim(line)
+            k_vect = np.array([0,0])
         if "Num_Orbitals" in line:
             num_orbitals=get_num_orbitals(line)
             
         if "Kpoint" in line:
             array=get_k(line)
-            if len(array)==3:
+            
+            if len(array)==2:
                 k_vect = np.vstack([k_vect, array])
             
         elif "--- Overlap Matrix S(K) ---" in line:
@@ -148,7 +158,7 @@ def get_output_arrays(filename):
             temp_ham=get_ham(i,f_list,num_orbitals)
             ham_k.append(temp_ham)
     k_vect=np.delete(k_vect,0,0)
-    return np.array(k_vect) ,np.array(overlap_k), np.array(ham_k)
+    return np.array(k_vect) ,np.array(overlap_k), np.array(ham_k), dim
 
 def read_HAM_OV(filename,n_kpoints):
 
@@ -244,6 +254,19 @@ def check_hermitian(arr1):
     
     print(np.allclose(arr1,adjoint(arr1)))
 
+def test_ham_k(hamiltonian_data,k_vect):
+    """create hamiltonian function with an input of k. Takes eigenvalues and
+    fills in diagonals of an empty array, to create diagonal matrix.
+    
+    :param eigenvalues: (array) array of eigenvalues extracted from Yaehmop.
+        size (n x m) n= number of kpoints, m = number of eigenvalues at one kpoint"""
+        
+    def h_k(k):
+        index=np.argmin(np.linalg.norm(k_vect-k,axis=1))
+        h=hamiltonian_data[index,:,:]
+        return h
+
+    return h_k
 
 def ham_k(eigenvalues,k_vect):
     """create hamiltonian function with an input of k. Takes eigenvalues and
@@ -332,7 +355,7 @@ def generate_k(nkx=10,nky=10,nkz=10,max_kx=1,max_ky=1,max_kz=1):
                 
     return np.array(k_vect)
 
-def get_k_info(k_vect):
+def get_k_info(k_vect,dim=3):
     """find max value of k in each direction. Also find number of different values
     in each direction
     
@@ -345,24 +368,14 @@ def get_k_info(k_vect):
             kx.append(k[0])
         if not close_to_any(k[1],ky):
             ky.append(k[1])
-        if not close_to_any(k[2],kz):
-            kz.append(k[2])
-    return max(kx),max(ky),max(kz),len(kx),len(ky),len(kz),(abs(kz[1]-kz[0]))
+        if dim==3:
+            if not close_to_any(k[2],kz):
+                kz.append(k[2])
+    if dim==3:
+        return max(kx),max(ky),max(kz),len(kx),len(ky),len(kz)
+    if dim==2:
+        return max(kx),max(ky),len(kx),len(ky)
 
-identity = np.identity(2, dtype=complex)
-pauli_x = np.array([[0, 1], [1, 0]], dtype=complex)
-pauli_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
-pauli_z = np.array([[1, 0], [0, -1]], dtype=complex)
-def test_hamiltonian(k, m, t1, t2, phi):
-    kx, ky = k
-    k_a = 2 * np.pi / 3. * np.array([-kx - ky, 2. * kx - ky, -kx + 2. * ky])
-    k_b = 2 * np.pi * np.array([kx, -kx + ky, ky])
-    H = 2 * t2 * np.cos(phi) * sum([np.cos(-val) for val in k_b]) * identity
-    H += t1 * sum([np.cos(-val) for val in k_a]) * pauli_x
-    H += t1 * sum([np.sin(-val) for val in k_a]) * pauli_y
-    H += m * pauli_z
-    H -= 2 * t2 * np.sin(phi) * sum([np.sin(-val) for val in k_b]) * pauli_z
-    return H
 
 def get_topology(filename):
     """get chern number and z2 invariants of all surfaces from hamiltonains,kpoints
@@ -373,40 +386,64 @@ def get_topology(filename):
     :returns: (list,list) chern number list, z2 invariant list of all surfaces"""
     
     #parse file to get all hamiltonians, kpoints and occupations
+    
     bandDict = _parse_eigenvalues(filename)
     k_vect=bandDict["kpoints"]
     eig_vals_=bandDict["bands"]
     occupation=bandDict["occupation"]
     occ_bands=np.where(occupation[0,:]!=0)
-    maxkx,maxky,maxkz,nkx,nky,nkz,dk=get_k_info(k_vect)
+    dim=len(k_vect[0,:])
+    hamiltonian=ham_k(eig_vals_,k_vect)
+    
+    k_vect ,overlap_k, hamiltonian_data,dim=get_output_arrays(filename)
+    hamiltonian=test_ham_k(hamiltonian_data,k_vect)
+    
     
     #define hamiltonian, create z2pack system, run calculation
-    hamiltonian=ham_k(eig_vals_,k_vect)
-    system = z2pack.hm.System(hamiltonian,dim=3,bands=occ_bands,convention=1)
-    result = z2pack.surface.run(
-        system=system,
-        surface= lambda t1,t2,t3: [maxkx*t1, maxky*t2, t3], 
-        pos_tol=None,
-        move_tol=None,
-        num_lines=nky ,
-        num_surfaces=nkx, 
-        iterator=range(nkz,27) )
+    system = z2pack.hm.System(hamiltonian,dim=dim,bands=occ_bands,convention=1)
+    if dim==2:
+        #hamiltonian=haldane_model.test_hamiltonian(0.5, 1., 1. / 3., 0.5 * np.pi)
+        system = z2pack.hm.System(hamiltonian,dim=dim,bands=occ_bands,convention=1)
+        maxkx,maxky,nkx,nky=get_k_info(k_vect,dim=dim)
+        result = z2pack.surface.run(
+            system=system,
+            surface= lambda t1,t2: [t1, t2], 
+            pos_tol=None,
+            move_tol=None,
+            num_lines=nkx , 
+            iterator=range(nky,27) )
+        
     
-
-    chern_=get_All_ChernNumbers(result)
-    z2_= get_All_Z2(result)
-    return chern_, z2_
+        chern_=z2pack.invariant.chern(result)
+        z2_= 0 #z2pack.invariant.z2(result)
+        return chern_, z2_
+    
+    if dim==3:
+        maxkx,maxky,maxkz,nkx,nky,nkz=get_k_info(k_vect,dim=dim)
+        result = z2pack.volume.run(
+            system=system,
+            volume= lambda t1,t2,t3: [maxkx*t1, maxky*t2, t3], 
+            pos_tol=None,
+            move_tol=None,
+            num_lines=nky ,
+            num_surfaces=nkx, 
+            iterator=range(nkz,27) )
+        
+    
+        chern_=get_All_ChernNumbers(result)
+        z2_= get_All_Z2(result)
+        return chern_, z2_
 
 
 if __name__=="__main__":
-    filename="C:/Users/danpa/Documents/argonne/topology_interface/eigenVal_parser/eigenVal_parser/mp-47/mp-47.out"
+    filename="mp-47.out"
     
-    chern_, z2_ = get_topology(filename);
-    print("chern numbers for all surfaces ",chern_)
-    print("z2 invariants for all surfaces ", z2_)    
+    # chern_, z2_ = get_topology(filename);
+    # print("chern numbers for all surfaces ",chern_)
+    # print("z2 invariants for all surfaces ", z2_)    
     
-    #wcc=get_topology(filename)
-    #print(z2pack.invariant.z2(wcc))
-    ##### figure out how to set momentum in z2pack 
+    chern_, z2_ = get_topology("haldane_output.OUT")
+    print("chern number ",chern_)
+    # print("z2 invariants for all surfaces ", z2_)
     
     
