@@ -1,0 +1,163 @@
+#BIND_OUTPUT version: 3.0 
+#JOB_TITLE: mp-47 
+; ********* Atoms within the unit cell:  ********* 
+# NUMBER OF ATOMS:  
+	5 
+# Crystallographic coordinates of atoms: 
+   1    C 0.333333 0.666667 0.062772 
+   2    C 0.666667 0.333333 0.562772 
+  3    C 0.666667 0.333333 0.937228 
+   4    C 0.333333 0.666667 0.437228 
+   5    & 0.000000 0.000000 0.000000 
+# ******** Extended Hueckel Parameters ******** 
+;  FORMAT  quantum number orbital: Hii, <c1>, exponent1, <c2>, <exponent2> 
+ATOM: C   Atomic number: 6  # Valence Electrons: 4 
+	2S:   -35.7440     2.0083 
+	2P:   -29.0014     1.9063 
+ATOM: &   Atomic number: -1  # Valence Electrons: 0 
+# CRYSTAL SPECIFICATION: 
+#Cell Constants:  
+2.5131 2.5131 4.1814  
+# alpha:  90.0000 
+# beta:  90.0000 
+# gamma:  120.0000 
+#Cell Volume: 22.8702 cubic Angstroms 
+# Positions of atoms from crystal coordinates 
+  1    C  -0.0000   1.4509   0.2625 
+   2    C   1.2565   0.7255   2.3532 
+   3    C   1.2565   0.7255   3.9189 
+   4    C  -0.0000   1.4509   1.8282 
+   5    &   0.0000   0.0000   0.0000 
+; Number of orbitals 
+#Num_Orbitals: 2 
+; ------  Lattice Parameters ------ 
+#Dimensionality: 1 
+#Lattice Vectors 
+(a) 2.513094 0.000000 0.000000 
+(b) -1.256547 2.176403 0.000000 
+(c) 0.000000 0.000000 4.181402 
+; RHO = 22.627844 
+;***& Kpoint: 1 (-0.0 ) Weight: 0.000000 
+ 
+;		 --- Hamiltonian H(K) --- 
+    C(  1) 2s       C(  1) 2px 
+ C(  1) 2s       (-0+0j)         (-0.3999999999999999+0j)          
+ C(  1) 2s       (-0.3999999999999999+0j)         (-0+0j)          
+#	******* Energies (in eV)  and Occupation Numbers ******* 
+1:--->  -0.3999999999999999  [2 Electrons] 
+2:--->  0.3999999999999999  [0 Electrons] 
+Total_Energy: 0.0 
+ 
+ 
+;***& Kpoint: 2 (-1526225.8858724455 ) Weight: 0.000000 
+ 
+;		 --- Hamiltonian H(K) --- 
+    C(  1) 2s       C(  1) 2px 
+ C(  1) 2s       0j         (-0.05521488685334042-0.9200660533695892j)          
+ C(  1) 2s       (-0.05521488685334042+0.9200660533695892j)         0j          
+#	******* Energies (in eV)  and Occupation Numbers ******* 
+1:--->  -0.9217213387425285  [2 Electrons] 
+2:--->  0.9217213387425285  [0 Electrons] 
+Total_Energy: 0.0 
+ 
+ 
+;***& Kpoint: 3 (-3052451.771744891 ) Weight: 0.000000 
+ 
+;		 --- Hamiltonian H(K) --- 
+    C(  1) 2s       C(  1) 2px 
+ C(  1) 2s       0j         (0.8093164893758454-1.3869534234342722j)          
+ C(  1) 2s       (0.8093164893758454+1.3869534234342722j)         0j          
+#	******* Energies (in eV)  and Occupation Numbers ******* 
+1:--->  -1.6058122489107158  [2 Electrons] 
+2:--->  1.6058122489107158  [0 Electrons] 
+Total_Energy: 0.0 
+ 
+ 
+;***& Kpoint: 4 (-4578677.657617337 ) Weight: 0.000000 
+ 
+;		 --- Hamiltonian H(K) --- 
+    C(  1) 2s       C(  1) 2px 
+ C(  1) 2s       0j         (1.7677690574040836-1.1706966620319905j)          
+ C(  1) 2s       (1.7677690574040836+1.1706966620319905j)         0j          
+#	******* Energies (in eV)  and Occupation Numbers ******* 
+1:--->  -2.1202684063127872  [2 Electrons] 
+2:--->  2.1202684063127872  [0 Electrons] 
+Total_Energy: 0.0 
+ 
+ 
+;***& Kpoint: 5 (-6104903.543489782 ) Weight: 0.000000 
+ 
+;		 --- Hamiltonian H(K) --- 
+    C(  1) 2s       C(  1) 2px 
+ C(  1) 2s       0j         (2.348056855394354-0.3778130683609094j)          
+ C(  1) 2s       (2.348056855394354+0.3778130683609094j)         0j          
+#	******* Energies (in eV)  and Occupation Numbers ******* 
+1:--->  -2.3782585458248033  [2 Electrons] 
+2:--->  2.3782585458248033  [0 Electrons] 
+Total_Energy: 0.0 
+ 
+ 
+;***& Kpoint: 6 (-7631129.429362227 ) Weight: 0.000000 
+ 
+;		 --- Hamiltonian H(K) --- 
+    C(  1) 2s       C(  1) 2px 
+ C(  1) 2s       0j         (2.264359025822958+0.6011624188353938j)          
+ C(  1) 2s       (2.264359025822958-0.6011624188353938j)         0j          
+#	******* Energies (in eV)  and Occupation Numbers ******* 
+1:--->  -2.3428013256880993  [2 Electrons] 
+2:--->  2.3428013256880993  [0 Electrons] 
+Total_Energy: 0.0 
+ 
+ 
+;***& Kpoint: 7 (-9157355.315234674 ) Weight: 0.000000 
+ 
+;		 --- Hamiltonian H(K) --- 
+    C(  1) 2s       C(  1) 2px 
+ C(  1) 2s       0j         (1.5579009635612069+1.2840352467348695j)          
+ C(  1) 2s       (1.5579009635612069-1.2840352467348695j)         0j          
+#	******* Energies (in eV)  and Occupation Numbers ******* 
+1:--->  -2.0188615423357823  [2 Electrons] 
+2:--->  2.0188615423357823  [0 Electrons] 
+Total_Energy: 0.0 
+ 
+ 
+;***& Kpoint: 8 (-10683581.201107118 ) Weight: 0.000000 
+ 
+;		 --- Hamiltonian H(K) --- 
+    C(  1) 2s       C(  1) 2px 
+ C(  1) 2s       0j         (0.576648678463723+1.334456315715688j)          
+ C(  1) 2s       (0.576648678463723-1.334456315715688j)         0j          
+#	******* Energies (in eV)  and Occupation Numbers ******* 
+1:--->  -1.4537184586182585  [2 Electrons] 
+2:--->  1.4537184586182585  [0 Electrons] 
+Total_Energy: 0.0 
+ 
+ 
+;***& Kpoint: 9 (-12209807.086979564 ) Weight: 0.000000 
+ 
+;		 --- Hamiltonian H(K) --- 
+    C(  1) 2s       C(  1) 2px 
+ C(  1) 2s       (-0+0j)         (-0.19608183625102105+0.7275907098021424j)          
+ C(  1) 2s       (-0.19608183625102105-0.7275907098021424j)         (-0+0j)          
+#	******* Energies (in eV)  and Occupation Numbers ******* 
+1:--->  -0.7535491540025492  [2 Electrons] 
+2:--->  0.7535491540025492  [0 Electrons] 
+Total_Energy: 0.0 
+ 
+ 
+;***& Kpoint: 10 (-13736032.97285201 ) Weight: 0.000000 
+ 
+;		 --- Hamiltonian H(K) --- 
+    C(  1) 2s       C(  1) 2px 
+ C(  1) 2s       0j         (-0.3796820521162232-0.23764981604951252j)          
+ C(  1) 2s       (-0.3796820521162232+0.23764981604951252j)         0j          
+#	******* Energies (in eV)  and Occupation Numbers ******* 
+1:--->  -0.44792398436292014  [2 Electrons] 
+2:--->  0.44792398436292014  [0 Electrons] 
+Total_Energy: 0.0 
+ 
+ 
+;  The Fermi Level was determined for 217 K points based on 
+;     an ordering of 3472 crystal orbitals occupied by 16.000000 electrons 
+;      in the unit cell (3472.000000 electrons total) 
+#Fermi_Energy:  0 

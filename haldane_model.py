@@ -6,22 +6,40 @@ Created on Wed Jul 28 15:14:14 2021
 """
 import numpy as np
 import z2pack
-import matplotlib.pyplot as plt
 import scipy.linalg as la
 import math
 import os
 import topology_interface_main as tim
-import itertools
+import shutil
+import matplotlib.pyplot as plt
 
-# if os.path.exists("haldane_output.OUT"):
-#     os.remove("haldane_output.OUT")
 identity = np.identity(2, dtype=complex)
 pauli_x = np.array([[0, 1], [1, 0]], dtype=complex)
 pauli_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
 pauli_z = np.array([[1, 0], [0, -1]], dtype=complex)
+pauli_vector = [pauli_x, pauli_y, pauli_z]
 
-def test_hamiltonian(m, t1, t2, phi):
-    def haldane_hamiltonian(k):
+def ssh_hamiltonian(alpha,t1=-0.75):
+    def s_hamiltonian(k):
+        try:
+            if len(k)!=1:
+                k=k[1]
+        except:
+            l=0
+        # if type(k)==np.ndarray or type(k)==list:
+        #     kf=k[1]
+        
+        k*=2*np.pi
+        t2=t1*alpha
+        Rx=t1-t2*np.cos(k)
+        Ry=-t2*np.sin(k)
+        
+        h=Rx*pauli_x + Ry*pauli_y
+        return h
+    return s_hamiltonian
+
+def haldane_hamiltonian(m, t1, t2, phi):
+    def h_hamiltonian(k):
         kx, ky = k
         k_a = 2 * np.pi / 3. * np.array([-kx - ky, 2. * kx - ky, -kx + 2. * ky])
         k_b = 2 * np.pi * np.array([kx, -kx + ky, ky])
@@ -31,35 +49,48 @@ def test_hamiltonian(m, t1, t2, phi):
         H += m * pauli_z
         H -= 2 * t2 * np.sin(phi) * sum([np.sin(-val) for val in k_b]) * pauli_z
         return H
-    return haldane_hamiltonian
+    return h_hamiltonian
 
-def generate_k(nkx=10,nky=10,max_kx=1,max_ky=1):
-        """generate kpoints for Yaehmop such that they meet requirements of Z2pack.
-        Note that the maximum k-value in the z direction must be 1 so that 
-        k(t1,t2,0)=k(t1,t2,1)+G , where G is an inverse lattice vector
-        
-        :param nkx: (int) number of kpoints in x direction
-        
-        :param nky: (int) number of kpoints in y direction
-        
-        :param nkz: (int) number of kpoints in z direction
-        
-        :param max_kx: (float) max k value in x direction. must be from 0 to 1
-        
-        :param max_ky: (float) max k value in y direction. must be from 0 to 1
-        
-        :returns: (array) np.array of kpoints, (3 X nkx*nky*nkz)
-        """
-        kx=np.linspace(0,max_kx,nkx)
-        ky=np.linspace(0,max_ky,nky+1)[:-1]
-        k_vect=[]
-        for i in kx:
-            for j in ky:
-                k_vect.append([i,j])
-                    
-        return np.array(k_vect)
-def write_yaehmop_output_from_haldane(k_vect,m, t1, t2, phi):
-    hamiltonian=test_hamiltonian(m, t1, t2, phi)
+def bhz(A, B, C, D, M):
+    def h(k):
+        kx, ky = 2 * np.pi * np.array(k)
+        d = [
+            A * np.sin(kx), -A * np.sin(ky),
+            -2 * B * (2 - (M / (2 * B)) - np.cos(kx) - np.cos(ky))
+        ]
+        H = sum(di * pi for di, pi in zip(d, pauli_vector))
+        epsilon = C - 2 * D * (2 - np.cos(kx) - np.cos(ky))
+        H += epsilon
+        return H
+
+    def Hamiltonian(k):
+        return np.vstack([
+            np.hstack([h(k), np.zeros((2, 2))]),
+            np.hstack([np.zeros((2, 2)),
+                       h(-np.array(k)).conjugate()])
+        ])
+
+    return Hamiltonian
+
+def plot_bands(h_k,k_vect):
+    bands=[]
+    for k in k_vect:
+        if type(k)==list or type(k)==np.array:
+            k=k[0]
+        h=h_k(k)
+        eigval=la.eigh(h)[0]
+        bands.append(eigval)
+    bands=np.array(bands)
+    for i in range(len(bands[0,:])):
+        plt.plot(k_vect,bands[:,i])
+    plt.title("band structure")
+    plt.ylabel("Energy")
+    plt.xlabel("Kx")
+    
+def write_yaehmop_output_from_ham(fname,k_vect,hamiltonian):
+    
+    dim=len(k_vect[0,:])
+    ham_dim=len(hamiltonian(k_vect[0,:])[:,0])
     header=["#BIND_OUTPUT version: 3.0 \n",
         
         "#JOB_TITLE: mp-47 \n",
@@ -97,10 +128,10 @@ def write_yaehmop_output_from_haldane(k_vect,m, t1, t2, phi):
         "   5    &   0.0000   0.0000   0.0000 \n",
         
         "; Number of orbitals \n",
-        "#Num_Orbitals: 2 \n",
+        "#Num_Orbitals: "+str(ham_dim)+" \n",
         
         "; ------  Lattice Parameters ------ \n",
-        "#Dimensionality: 2 \n",
+        "#Dimensionality: "+str(dim)+" \n",
         "#Lattice Vectors \n",
         "(a) 2.513094 0.000000 0.000000 \n",
         "(b) -1.256547 2.176403 0.000000 \n",
@@ -109,21 +140,27 @@ def write_yaehmop_output_from_haldane(k_vect,m, t1, t2, phi):
         
         "; RHO = 22.627844 \n"]
     
-    f=open("haldane_output.OUT","a")
+    f=open(fname,"w")
     f.writelines(header)
     line=[]
     for i,k in enumerate(k_vect):
-        line.append(";***& Kpoint: "+str(i+1)+" ("+str(k[0])+" "+str(k[1])+") Weight: 0.000000 \n")
+        kstr=""
+        for s in range(dim):
+            kstr+=str(k[s])+" "
+        line.append(";***& Kpoint: "+str(i+1)+" ("+kstr+") Weight: 0.000000 \n")
         
-        line.append("#	******* Energies (in eV)  and Occupation Numbers ******* \n")
         temp_h=hamiltonian(k)
         eigval=la.eigh(temp_h)[0]
         line.append(" \n")
         line.append(";		 --- Hamiltonian H(K) --- \n")
         line.append("    C(  1) 2s       C(  1) 2px \n")
         for n in range(len(temp_h[:,0])):
-            line.append(" C(  1) 2s       "+str(temp_h[n,0])+"         "+str(temp_h[n,1])+" \n")
-                
+            temp_str=""
+            for m in range(len(temp_h[0,:])):
+                temp_str+=str(temp_h[n,m])+"         "
+            line.append(" C(  1) 2s       "+temp_str+" \n")
+        
+        line.append("#	******* Energies (in eV)  and Occupation Numbers ******* \n")
         for j,val in enumerate(eigval):
             occ=0
             if (j+1)<=int(len(eigval)/2):
@@ -137,8 +174,8 @@ def write_yaehmop_output_from_haldane(k_vect,m, t1, t2, phi):
     end=[";  The Fermi Level was determined for 217 K points based on \n",
         ";     an ordering of 3472 crystal orbitals occupied by 16.000000 electrons \n",
         ";      in the unit cell (3472.000000 electrons total) \n",
-        "#Fermi_Energy:  -28.376236 \n"]
-    list(itertools.chain.from_iterable(line))
+        "#Fermi_Energy:  0 \n"]
+    # list(itertools.chain.from_iterable(line))
     
     
     f.writelines(line)
@@ -146,8 +183,19 @@ def write_yaehmop_output_from_haldane(k_vect,m, t1, t2, phi):
     f.close()
 
 if __name__=="__main__":
-    k_vect=generate_k() 
-    write_yaehmop_output_from_haldane(k_vect,0.5, 1., 1. / 3., 0.5 * np.pi)
+    # k_vect=tim.generate_k(nkx=10,nky=10,nkz=10,max_kx=1,max_ky=1,dim=2) 
+    # hamiltonian=haldane_hamiltonian(0.5, 1., 1. / 3., 0.5 * np.pi)
+    # write_yaehmop_output_from_ham("haldane_output.OUT",k_vect,hamiltonian)
+    
+    k2_vect=tim.generate_k(nkx=10,dim=1)
+    hamiltonian=ssh_hamiltonian(2)
+    write_yaehmop_output_from_ham("ssh_output.OUT",k2_vect,hamiltonian)
+    
+    # k3_vect=tim.generate_k(max_kx=0.5,dim=2)
+    # hamiltonian=bhz(0.5, 1., 0., 0., 1.)
+    # write_yaehmop_output_from_ham("bhz_output.OUT",k3_vect,hamiltonian)
+    
+    
         
     
     

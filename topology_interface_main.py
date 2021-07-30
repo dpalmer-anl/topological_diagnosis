@@ -35,13 +35,17 @@ def change_basis_array(array,array_basis,desired_basis):
 def adjoint(arr):
     return np.conj(np.transpose(arr))
 
-def extract_floats(array):
+def extract_floats(array,is_real=True):
     new_array=[]
     for element in array:
         try:
-            new_array.append(complex(element))
+            if is_real:
+                #print(element)
+                new_array.append(float(element))
+            else:
+                new_array.append(complex(element))
         except:
-            l=0 #array.remove(element)
+            l=0 
     return new_array
             
 def get_overlap(index,read_obj,num_orbitals):
@@ -64,29 +68,43 @@ def get_overlap(index,read_obj,num_orbitals):
             array+=read_obj[first_line+i+j*(num_orbitals+1)].split(" ")
         array=extract_floats(array)
         overlap.append(array)
-    return np.array(overlap)
+    return overlap
 
 def get_ham(index,read_obj,num_orbitals):
     h=[]
-    first_line=index
+    first_line=index+2
     first_line_reached=False
     num_pages=math.ceil(num_orbitals/4)
+    n=0
+    for i in range(num_orbitals):
+        
+        array=""
+        for j in range(num_pages):
+            array+=read_obj[first_line+i+j*(num_orbitals+1)]
+        array=array.split(" ")
+
+        array=extract_floats(array,is_real=False)
+        h.append(array)
+    return h
+
+def get_occ(index,read_obj,num_orbitals):
+    occ=[]
+    first_line=index
+    first_line_reached=False
     n=0
     while first_line_reached==False:
         if "." in read_obj[index+n]:
             first_line_reached=True
             first_line=index+n
         n+=1
-        
+    array=[]   
     for i in range(num_orbitals):
-        
-        array=[]
-        for j in range(num_pages):
-            array+=read_obj[first_line+i+j*(num_orbitals+1)].split(" ")
-        
-        array=extract_floats(array)
-        h.append(array)
-    return np.array(h)
+        line=read_obj[first_line+i]
+        line=line.replace("[","")
+        line=line.replace("]","")
+        array=extract_floats(line.split(" "))
+        occ.append(int(array[-1]))
+    return occ
 
 def get_k(line):
     """get an array of k vectors from Yaehmop output file
@@ -95,8 +113,14 @@ def get_k(line):
     ind_right=line.find(")")
     array=line[ind_left+1:ind_right]
     array=array.split(" ")
-    array=np.asarray(array, dtype=np.float64) #,order='C'
-    return array
+    k=[]
+    for element in array:
+        try:
+            k.append(float(element))
+        except:
+            l=0
+
+    return np.array(k)
 
 def get_num_orbitals(line):
     ind_left=line.find(":")
@@ -132,22 +156,24 @@ def get_output_arrays(filename):
     k_vect = np.array([0,0,0])
     overlap_k=[]
     ham_k=[]
+    occupation=[]
     dim=3
     # Open the file in read only mode
     f = open(filename, "r")
     f_list=f.readlines()
+    t=0
     for i,line in enumerate(f_list):
         # For each line, check if line contains the string
         if "Dimensionality" in line:
             dim=get_dim(line)
-            k_vect = np.array([0,0])
+            k_vect = np.zeros(dim)
         if "Num_Orbitals" in line:
             num_orbitals=get_num_orbitals(line)
             
         if "Kpoint" in line:
             array=get_k(line)
             
-            if len(array)==2:
+            if len(array)==dim:
                 k_vect = np.vstack([k_vect, array])
             
         elif "--- Overlap Matrix S(K) ---" in line:
@@ -157,8 +183,13 @@ def get_output_arrays(filename):
         elif "--- Hamiltonian H(K) ---" in line:
             temp_ham=get_ham(i,f_list,num_orbitals)
             ham_k.append(temp_ham)
+            
+        elif "Occupation Numbers" in line:
+            temp_occ=get_occ(i,f_list,num_orbitals)
+            occupation.append(temp_occ)
+            
     k_vect=np.delete(k_vect,0,0)
-    return np.array(k_vect) ,np.array(overlap_k), np.array(ham_k), dim
+    return np.array(k_vect) ,np.array(occupation),np.array(overlap_k), np.array(ham_k,dtype=complex), dim
 
 def read_HAM_OV(filename,n_kpoints):
 
@@ -326,7 +357,7 @@ def close_to_any(a, floats):
   :returns: (bool) true if a is in floats, false if not"""
   return np.any(np.isclose(a, floats,rtol=1e-4))
 
-def generate_k(nkx=10,nky=10,nkz=10,max_kx=1,max_ky=1,max_kz=1):
+def generate_k(nkx=11,nky=11,nkz=8,max_kx=1,max_ky=1,dim=3):
     """generate kpoints for Yaehmop such that they meet requirements of Z2pack.
     Note that the maximum k-value in the z direction must be 1 so that 
     k(t1,t2,0)=k(t1,t2,1)+G , where G is an inverse lattice vector
@@ -343,15 +374,28 @@ def generate_k(nkx=10,nky=10,nkz=10,max_kx=1,max_ky=1,max_kz=1):
     
     :returns: (array) np.array of kpoints, (3 X nkx*nky*nkz)
     """
-    kx=np.linspace(0,max_kx,nkx)
-    ky=np.linspace(0,max_ky,nky)
-    kz=np.linspace(0,1,nkz+1)[:-1]
+    
     k_vect=[]
-    for i in kx:
-        for j in ky:
-            for k in kz:
-                
-                k_vect.append([i,j,k])
+    if dim==3:
+        kx=np.linspace(0,max_kx,nkx)
+        ky=np.linspace(0,max_ky,nky)
+        kz=np.linspace(0,1,nkz+1)[:-1]
+        for i in kx:
+            for j in ky:
+                for k in kz:
+                    k_vect.append([i,j,k])
+    if dim==2:
+        kx=np.linspace(0,max_kx,nkx)
+        ky=np.linspace(0,1,nky+1)[:-1]
+        for i in kx:
+            for j in ky:
+                k_vect.append([i,j])
+    
+    if dim==1:
+        kx=np.linspace(0,1,nkx+1)[:-1]               
+        for j in kx:
+            k_vect.append([j])
+
                 
     return np.array(k_vect)
 
@@ -364,17 +408,22 @@ def get_k_info(k_vect,dim=3):
     ky=[]
     kz=[]
     for k in k_vect:
+        
         if not close_to_any(k[0],kx):
             kx.append(k[0])
-        if not close_to_any(k[1],ky):
-            ky.append(k[1])
+        if dim>=2:
+            if not close_to_any(k[1],ky):
+                ky.append(k[1])
         if dim==3:
             if not close_to_any(k[2],kz):
                 kz.append(k[2])
-    if dim==3:
-        return max(kx),max(ky),max(kz),len(kx),len(ky),len(kz)
+    if dim==1:
+        return max(kx),len(kx)
     if dim==2:
         return max(kx),max(ky),len(kx),len(ky)
+    if dim==3:
+        return max(kx),max(ky),max(kz),len(kx),len(ky),len(kz)
+    
 
 
 def get_topology(filename):
@@ -387,35 +436,52 @@ def get_topology(filename):
     
     #parse file to get all hamiltonians, kpoints and occupations
     
-    bandDict = _parse_eigenvalues(filename)
-    k_vect=bandDict["kpoints"]
-    eig_vals_=bandDict["bands"]
-    occupation=bandDict["occupation"]
+    # bandDict = _parse_eigenvalues(filename)
+    # k_vect=bandDict["kpoints"]
+    # eig_vals_=bandDict["bands"]
+    # occupation=bandDict["occupation"]
+    # occ_bands=np.where(occupation[0,:]!=0)
+    # dim=len(k_vect[0,:])
+    # hamiltonian=ham_k(eig_vals_,k_vect)
+    
+    k_vect ,occupation,overlap_k, hamiltonian_data,dim=get_output_arrays(filename)
     occ_bands=np.where(occupation[0,:]!=0)
-    dim=len(k_vect[0,:])
-    hamiltonian=ham_k(eig_vals_,k_vect)
-    
-    k_vect ,overlap_k, hamiltonian_data,dim=get_output_arrays(filename)
     hamiltonian=test_ham_k(hamiltonian_data,k_vect)
-    
-    
+
     #define hamiltonian, create z2pack system, run calculation
     system = z2pack.hm.System(hamiltonian,dim=dim,bands=occ_bands,convention=1)
+    if dim==1:
+        maxkx,nkx=get_k_info(k_vect,dim=1)
+        result = z2pack.line.run(
+            system=system,
+            line= lambda t1: [t1], 
+            pos_tol=None,
+            
+            
+            iterator=range(nkx,40)
+             )
+        
+    
+        chern_= result.pol #z2pack.invariant.chern(result)
+        z2_=None
+        return chern_, z2_
+    
     if dim==2:
-        #hamiltonian=haldane_model.test_hamiltonian(0.5, 1., 1. / 3., 0.5 * np.pi)
-        system = z2pack.hm.System(hamiltonian,dim=dim,bands=occ_bands,convention=1)
         maxkx,maxky,nkx,nky=get_k_info(k_vect,dim=dim)
         result = z2pack.surface.run(
             system=system,
-            surface= lambda t1,t2: [t1, t2], 
+            surface= lambda t1,t2: [maxkx*t1, t2], 
             pos_tol=None,
             move_tol=None,
             num_lines=nkx , 
-            iterator=range(nky,27) )
+            iterator=range(nky,40) )
         
     
         chern_=z2pack.invariant.chern(result)
-        z2_= 0 #z2pack.invariant.z2(result)
+        try:
+            z2_=z2pack.invariant.z2(result)
+        except:
+            z2_=None
         return chern_, z2_
     
     if dim==3:
@@ -427,7 +493,7 @@ def get_topology(filename):
             move_tol=None,
             num_lines=nky ,
             num_surfaces=nkx, 
-            iterator=range(nkz,27) )
+            iterator=range(nkz,40) )
         
     
         chern_=get_All_ChernNumbers(result)
@@ -441,9 +507,11 @@ if __name__=="__main__":
     # chern_, z2_ = get_topology(filename);
     # print("chern numbers for all surfaces ",chern_)
     # print("z2 invariants for all surfaces ", z2_)    
+    chern_, z2_ = get_topology("ssh_output.OUT")
+    print("chern number ",chern_, z2_)
     
-    chern_, z2_ = get_topology("haldane_output.OUT")
-    print("chern number ",chern_)
-    # print("z2 invariants for all surfaces ", z2_)
+    # chern_, z2_ = get_topology("ssh_output.OUT")
+    # print("chern number ",chern_, z2_)
+    # # print("z2 invariants for all surfaces ", z2_)
     
     
