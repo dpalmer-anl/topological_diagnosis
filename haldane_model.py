@@ -12,6 +12,7 @@ import os
 import topology_interface_main as tim
 import shutil
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D  
 
 identity = np.identity(2, dtype=complex)
 pauli_x = np.array([[0, 1], [1, 0]], dtype=complex)
@@ -23,14 +24,14 @@ def ssh_hamiltonian(alpha,t1=-0.75):
     def s_hamiltonian(k):
         try:
             if len(k)!=1:
-                k=k[1]
+                k=k[0]
         except:
             l=0
         # if type(k)==np.ndarray or type(k)==list:
         #     kf=k[1]
         
         k*=2*np.pi
-        t2=t1*alpha
+        t2=-t1*alpha
         Rx=t1-t2*np.cos(k)
         Ry=-t2*np.sin(k)
         
@@ -53,7 +54,7 @@ def haldane_hamiltonian(m, t1, t2, phi):
 
 def bhz(A, B, C, D, M):
     def h(k):
-        kx, ky = 2 * np.pi * np.array(k)
+        kx, ky = 2* np.pi * np.array(k)
         d = [
             A * np.sin(kx), -A * np.sin(ky),
             -2 * B * (2 - (M / (2 * B)) - np.cos(kx) - np.cos(ky))
@@ -72,17 +73,47 @@ def bhz(A, B, C, D, M):
 
     return Hamiltonian
 
-def plot_bands(h_k,k_vect):
+def bhz_3D(A,B,C,D,M):
+    
+    def h(k):
+        kz=np.pi*k[-1]
+        ham_func_2D=bhz(A,B,C,D,M)
+        partial_ham=ham_func_2D(k[0:2])
+        H=np.zeros_like(partial_ham)+partial_ham
+        extra_dim=A*kz*np.identity(2)
+        H[2:4,0:2]=np.conj(np.transpose(extra_dim))
+        H[0:2,2:4]=np.conj(np.transpose(extra_dim))
+        return H
+    return h
+
+def test_bhz_3D(A,B,M):
+    def h(k):
+        kx,ky,kz=np.pi*np.array(k)
+        M_k=M-B*(np.linalg.norm(k))
+        k_plus=kx+1j*ky
+        k_minus=kx-1j*ky
+        
+        h_00=np.array([[M_k,A*k_plus],[A*k_minus,-M_k]])
+        h_11=np.array([[M_k,-A*k_plus],[-A*k_minus,-M_k]])
+        h_10=np.array([[0,np.conj(A)*kz],[np.conj(A)*kz,0]])
+        h_01=np.array([[0,np.conj(A)*kz],[np.conj(A)*kz,0]])
+        
+        H=np.vstack((np.hstack((h_00,h_01)),
+                     np.hstack((h_10,h_11))))
+        return H
+    return h
+    
+def plot_bands(h_k,k_vect,axis=0):
     bands=[]
     for k in k_vect:
-        if type(k)==list or type(k)==np.array:
-            k=k[0]
+        # if type(k)==list or type(k)==np.array:
+        #     k=k[axis]
         h=h_k(k)
         eigval=la.eigh(h)[0]
         bands.append(eigval)
     bands=np.array(bands)
     for i in range(len(bands[0,:])):
-        plt.plot(k_vect,bands[:,i])
+        plt.plot(k_vect[:,axis],bands[:,i])
     plt.title("band structure")
     plt.ylabel("Energy")
     plt.xlabel("Kx")
@@ -187,13 +218,52 @@ if __name__=="__main__":
     # hamiltonian=haldane_hamiltonian(0.5, 1., 1. / 3., 0.5 * np.pi)
     # write_yaehmop_output_from_ham("haldane_output.OUT",k_vect,hamiltonian)
     
-    k2_vect=tim.generate_k(nkx=10,dim=1)
-    hamiltonian=ssh_hamiltonian(2)
-    write_yaehmop_output_from_ham("ssh_output.OUT",k2_vect,hamiltonian)
+    # k2_vect=tim.generate_k(nkx=10,max_kx=1.0,dim=1)
+    # hamiltonian=ssh_hamiltonian(2,t1=-1.0)
+    # write_yaehmop_output_from_ham("ssh_output.OUT",k2_vect,hamiltonian)
     
-    # k3_vect=tim.generate_k(max_kx=0.5,dim=2)
-    # hamiltonian=bhz(0.5, 1., 0., 0., 1.)
-    # write_yaehmop_output_from_ham("bhz_output.OUT",k3_vect,hamiltonian)
+    #k3_vect=tim.generate_k(max_kx=0.5,dim=2)
+    #hamiltonian=bhz(0.5, 1., 0., 0., 1.)
+    #write_yaehmop_output_from_ham("bhz_output.OUT",k3_vect,hamiltonian)
+    
+    k_vect=np.zeros((100,3))
+    axis=0
+    k_vect[:,1]=np.zeros_like(k_vect[:,1])
+    k_vect[:,axis]=np.linspace(-1,1,100)
+    h_k=test_bhz_3D(2.0, 0, 1.0) #bhz_3D(.5, 1,0,0, -1) #
+    # plot_bands(h_k,k_vect,axis=axis)
+    # plt.show()
+    
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    x=np.linspace(-1,1,100)
+    y=np.linspace(-1,1,100)
+    X,Y=np.meshgrid(x,y)
+    
+    x_=np.ravel(X)
+    y_=np.ravel(Y)
+    zs=np.zeros((4,X.shape[0],X.shape[1]))
+    for i in range(X.shape[0]):
+        for j in range(X.shape[1]):
+            
+            ham=h_k([X[i,j],Y[i,j],0])
+            eigval=la.eigh(ham)[0]
+        
+            zs[:,i,j]=eigval
+    
+    Z = zs.reshape((4,X.shape[0],X.shape[1]))
+    
+    for n in range(4):
+        ax.plot_surface(X, Y, Z[n,:,:])
+    
+    ax.set_xlabel('Ky')
+    ax.set_ylabel('Kx')
+    ax.set_zlabel('Energy')
+    
+    plt.show()
+    
+    
+    
     
     
         

@@ -16,11 +16,9 @@ import os
 import re
 import sys
 import time
-import haldane_model
+import haldane_model 
 
-###############################################################################
-# not needed anymore
-###############################################################################
+
 def change_basis(basis_a,basis_b):
     """change array a into basis from array b
     returns change of basis array """
@@ -28,14 +26,24 @@ def change_basis(basis_a,basis_b):
     return u
 
 def change_basis_array(array,array_basis,desired_basis):
+    """change basis of given array into desired basis """
     u=change_basis(array_basis,desired_basis)
     return adjoint(u) @ array @ u
 
 
 def adjoint(arr):
+    """return adjoint of given array """
     return np.conj(np.transpose(arr))
 
+
+##############################################################################
+    
+# Yaehmop output file parsers
+    
+##############################################################################
+    
 def extract_floats(array,is_real=True):
+    """extract floats from a list of strings """
     new_array=[]
     for element in array:
         try:
@@ -71,6 +79,7 @@ def get_overlap(index,read_obj,num_orbitals):
     return overlap
 
 def get_ham(index,read_obj,num_orbitals):
+    """extracts hamiltonian matrix for single k value from output file """
     h=[]
     first_line=index+2
     first_line_reached=False
@@ -88,6 +97,7 @@ def get_ham(index,read_obj,num_orbitals):
     return h
 
 def get_occ(index,read_obj,num_orbitals):
+    """extracts occupation for single k value from output file """
     occ=[]
     first_line=index
     first_line_reached=False
@@ -123,11 +133,13 @@ def get_k(line):
     return np.array(k)
 
 def get_num_orbitals(line):
+    """extracts number of orbitals from output file """
     ind_left=line.find(":")
     num=line[ind_left+1:]
     return int(num)
 
 def get_dim(line):
+    """extracts number of dimensions from output file """
     ind_left=line.find(":")
     num=line[ind_left+1:]
     return int(num)
@@ -152,7 +164,8 @@ def get_k_vect(filename):
     return kpoints
     
 def get_output_arrays(filename):
-    
+    """parses yaehmop output file to get kpoints, occupation, overlap as a function of k
+    hamiltonian as a function of k, and number of dimensions"""
     k_vect = np.array([0,0,0])
     overlap_k=[]
     ham_k=[]
@@ -190,24 +203,6 @@ def get_output_arrays(filename):
             
     k_vect=np.delete(k_vect,0,0)
     return np.array(k_vect) ,np.array(occupation),np.array(overlap_k), np.array(ham_k,dtype=complex), dim
-
-def read_HAM_OV(filename,n_kpoints):
-
-    with open(filename,'rb') as f: 
-        b = f.read() 
-        dat = np.frombuffer(b,dtype=np.csingle)
-        del b 
-        f.close()
-    n_matrix = int(np.sqrt((dat.shape[0]-1)/n_kpoints))
-    return(dat[1:].reshape(n_kpoints,n_matrix,n_matrix))
-
-
-
-##############################################################################
-    
-# Yaehmop output file parser
-    
-##############################################################################
 
 
 def _parse_eigenvalues(filename):
@@ -277,6 +272,162 @@ def _parse_eigenvalues(filename):
 ##############################################################################
     
 ##############################################################################
+    
+##############################################################################
+    
+#              Kpoint Methods
+    
+##############################################################################
+def generate_k_3D(n=10,surfaces="default"):
+    """ Generate Kpoints given ranges for each k direction. i.e. a range of [(0,1),(0,1),(0,1)] means all combinations of
+    kx, ky,kz from 0 to 1 will be placed in a numpy array.
+    
+    :param surfaces: (array, nx3x2) ranges for kx, ky, kz default is the 6 surfaces on the edge of the BZ. if surface range
+    same, will automatically set nk equal to 1, ranges dimensions= [(number of surfaces)*nkx*nky*nkz, 3, 2]
+    
+    :param n: (int) number of kpoints for each direction nkx=nky=nkz
+    
+    :return kpoints: (array)
+    """
+    if surfaces=="default":
+        surfaces=np.array([[(1,1),(0,1),(0,1)],
+                            [(0,1),(1,1),(0,1)],
+                            [(0,1),(0,1),(1,1)],
+                            [(0,0),(0,1),(0,1)],
+                            [(0,1),(0,0),(0,1)],
+                            [(0,1),(0,1),(0,0)],
+                            ])
+    nkx=n
+    nky=n
+    nkz=n
+    k_vect=np.array([0,0,0])
+    if len(surfaces.shape)<3:
+        it=1
+    else:
+        it=surfaces.shape[0]
+    for i in range(it):
+        numx=nkx
+        numy=nky
+        numz=nkz
+        if len(surfaces.shape)<3:
+            s=surfaces
+        else:
+            s=surfaces[i,:,:]
+        if np.isclose(s[0,0],s[0,1]):
+            numx=1
+        if np.isclose(s[1,0],s[1,1]):
+            numy=1
+        if np.isclose(s[2,0],s[2,1]):
+            numz=1
+        #main kpoint builder
+
+        kx=np.linspace(s[0,0],s[0,1],numx)
+        ky=np.linspace(s[1,0],s[1,1],numy)
+        kz=np.linspace(s[2,0],s[2,1],numz)
+
+        X,Y,Z=np.meshgrid(kx,ky,kz)
+        X=np.ravel(X)
+        Y=np.ravel(Y)
+        Z=np.ravel(Z)
+        
+        k_vect=np.vstack((k_vect,np.stack((X,Y,Z),axis=1)))
+
+    return k_vect
+                
+def generate_k_1D(nkx=10):
+    """generate kpoints for Yaehmop such that they meet requirements of Z2pack.
+    Note that the maximum k-value in the z direction must be 1 so that 
+    k(t1,t2,0)=k(t1,t2,1)+G , where G is an inverse lattice vector
+    
+    :param nkx: (int) number of kpoints in x direction
+    
+    :returns: (array) np.array of kpoints, length= nkx
+    """
+    
+    k_vect=[]
+    kx=np.linspace(0,1,nkx)[:-1]               
+    for j in kx:
+        k_vect.append([j])
+                
+    return np.array(k_vect)
+
+
+def generate_k_2D(n=10,surfaces="default"):
+    """ Generate Kpoints given ranges for each k direction. i.e. a range of [(0,1),(0,1),(0,1)] means all combinations of
+    kx, ky,kz from 0 to 1 will be placed in a numpy array.
+    
+    :param surfaces: (array, nx3x2) ranges for kx, ky, kz default is the 6 surfaces on the edge of the BZ. if surface range
+    same, will automatically set nk equal to 1, ranges dimensions= [(number of surfaces)*nkx*nky*nkz, 3, 2]
+    
+    :param n: (int) number of kpoints for each direction nkx=nky=nkz
+    
+    :return kpoints: (array)
+    """
+    if surfaces=="default":
+        surfaces=np.array([(0,1),(0,1)])
+    nkx=n
+    nky=n
+    k_vect=np.array([0,0])
+    if len(surfaces.shape)<3:
+        it=1
+    else:
+        it=surfaces.shape[0]
+    for i in range(it):
+        numx=nkx
+        numy=nky
+        if len(surfaces.shape)<3:
+            s=surfaces
+        else:
+            s=surfaces[i,:,:]
+        if np.isclose(s[0,0],s[0,1]):
+            numx=1
+        if np.isclose(s[1,0],s[1,1]):
+            numy=1
+
+        #main kpoint builder
+
+        kx=np.linspace(s[0,0],s[0,1],numx)
+        ky=np.linspace(s[1,0],s[1,1],numy)
+
+        X,Y=np.meshgrid(kx,ky)
+        X=np.ravel(X)
+        Y=np.ravel(Y)
+        
+        k_vect=np.vstack((k_vect,np.stack((X,Y),axis=1)))
+
+    return k_vect 
+
+def get_k_info(k_vect,dim=3):
+    """find max value of k in each direction. Also find number of different values
+    in each direction
+    
+    :param k_vect: (array) kpoints array to get data from"""
+    kx=[0]
+    ky=[0]
+    kz=[0]
+    for k in k_vect:
+        
+        if not close_to_any(k[0],kx) and k[0]>0:
+            kx.append(k[0])
+        if dim>=2:
+            if not close_to_any(k[1],ky) and k[1]>0:
+                ky.append(k[1])
+        if dim==3:
+            if not close_to_any(k[2],kz) and k[2]>0:
+                kz.append(k[2])
+    if dim==1:
+        return max(kx),len(kx)
+    if dim==2:
+        return max(kx),max(ky),len(kx),len(ky)
+    if dim==3:
+        return max(kx),max(ky),max(kz),len(kx),len(ky),len(kz)
+    
+##############################################################################
+        
+#            Topology calculation methods
+        
+###############################################################################
+        
 def check_hermitian(arr1):
     """Checks to see if an array is hermitian adjoint(arr)?=arr. print true if
     hermitian, false if not.
@@ -285,39 +436,58 @@ def check_hermitian(arr1):
     
     print(np.allclose(arr1,adjoint(arr1)))
 
-def test_ham_k(hamiltonian_data,k_vect):
-    """create hamiltonian function with an input of k. Takes eigenvalues and
-    fills in diagonals of an empty array, to create diagonal matrix.
+def ham_k(hamiltonian_data,overlap,k_vect):
+    """create hamiltonian function with an input of k. Takes hamiltonian array at
+    all kpoints and returns hamiltonian at provided k point. If overlap matrices are
+    present in Yaehmop output file, will change into overlap basis.
     
-    :param eigenvalues: (array) array of eigenvalues extracted from Yaehmop.
-        size (n x m) n= number of kpoints, m = number of eigenvalues at one kpoint"""
+    :param hamiltonian_data: (array) array of hamiltonians at all kpoints extracted from Yaehmop.
+        size (n x m x m) n= number of kpoints, m = dimension of hamiltonian
         
+    :param overlap: (array) array of overlap matrices at all kpoints extracted from Yaehmop.
+        size (n x m x m) n= number of kpoints, m = dimension of hamiltonian if present in file
+        
+    :param k_vect: (array) vector of kpoints
+    
+    :returns: (function) h as a function of k"""
+    
+    is_overlap=False
+    if np.shape(overlap)==np.shape(hamiltonian_data):
+        is_overlap=True
     def h_k(k):
         index=np.argmin(np.linalg.norm(k_vect-k,axis=1))
         h=hamiltonian_data[index,:,:]
+        if is_overlap:
+            h_basis=la.eigh(h)[1]
+            o_basis=la.eigh(overlap[index,:,:])[1]
+            h=change_basis_array(h,h_basis,o_basis)
         return h
 
     return h_k
 
-def ham_k(eigenvalues,k_vect):
-    """create hamiltonian function with an input of k. Takes eigenvalues and
-    fills in diagonals of an empty array, to create diagonal matrix.
+def ham_k_fromEigenvalues(eigVal_data,k_vect,efermi):
+    """create hamiltonian function with an input of k. Takes eigenvalues array at
+    all kpoints and returns diagonal hamiltonian at provided k point. Sets fermi level=0
     
-    :param eigenvalues: (array) array of eigenvalues extracted from Yaehmop.
-        size (n x m) n= number of kpoints, m = number of eigenvalues at one kpoint"""
+    :param eigVal_data: (array) array of hamiltonians at all kpoints extracted from Yaehmop.
+        size (n x m x m) n= number of kpoints, m = dimension of hamiltonian
+        
+    :param k_vect: (array) vector of kpoints
+    
+    :param efermi: (float) fermi energy
+    
+    :returns: (function) h as a function of k"""
         
     def h_k(k):
-        
-        # with open("KPOINTS","a") as f:
-        #     f.write(str(k) +" \n")
-        # f.close()
         index=np.argmin(np.linalg.norm(k_vect-k,axis=1))
-        e_vals_k=eigenvalues[index,:]
-        num_evals=len(e_vals_k)
-        base_ham=np.zeros((num_evals,num_evals))
-        np.fill_diagonal(base_ham,e_vals_k)
-        return base_ham
-
+        eigval=eigVal_data[index,:]
+        #set fermi energy equal to zero
+        eigval-=efermi
+        ham_dim=len(eigval)
+        h=np.zeros((ham_dim,ham_dim))
+        np.fill_diagonal(h,eigval)
+        return h
+    
     return h_k
 
 def get_All_ChernNumbers(volume_result):
@@ -344,7 +514,62 @@ def get_All_Z2(volume_result):
     z2_=[]
     for surf in surfaces:
         z2_.append(z2pack.invariant.z2(surf))
-    return z2_    
+    return z2_
+
+def z2_3d(system,n,surfaces):
+    """calculate 3D z2 invariant of a given z2pack system
+    
+    :param system: (z2pack.hm.system obj) system to calculate invariant of
+    
+    :param surfaces: (array) surfaces to calculate 2D z2 invariant over
+        dimension= (6,3,2)
+    
+    :param n: (int) number of kpoints in each direction"""
+    
+    z2_indices=np.zeros(4)
+    surfaces=np.array(surfaces)
+    if len(surfaces.shape)<3:
+        it=1
+    else:
+        it=surfaces.shape[0]
+    z2_=np.zeros(it)  
+    for i in range(it):
+
+        if len(surfaces.shape)<3:
+            s=surfaces
+        else:
+            s=surfaces[i,:,:]
+            
+        if np.isclose(s[0,0],s[0,1]):
+            numx=1
+            surface=lambda t1,t2: [s[0,1], t1*s[1,1], t2*s[2,1]]
+        if np.isclose(s[1,0],s[1,1]):
+            numy=1
+            surface=lambda t1,t2: [t1*s[0,1], s[1,1], t2*s[2,1]]
+        if np.isclose(s[2,0],s[2,1]):
+            numz=1
+            surface=lambda t1,t2: [t1*s[0,1], t2*s[1,1], s[2,1]]
+        
+        result = z2pack.surface.run(
+            system=system,
+            surface= surface, 
+            pos_tol=None,
+            gap_tol=None,
+            move_tol=None,
+            num_lines=n, 
+            iterator=range(n,40) 
+            )
+        
+        z2_[i]=z2pack.invariant.z2(result, check_kramers_pairs=False)
+    
+    n4_n1=abs(z2_[3]+z2_[0])%2
+    n5_n2=abs(z2_[4]+z2_[1])%2
+    n6_n3=abs(z2_[5]+z2_[2])%2
+    if n4_n1==1 or n5_n2==1 or n6_n3==1:
+        z2_indices[0]=1
+    z2_indices[1:]=z2_[0:3]
+    return z2_indices
+    
 
 def close_to_any(a, floats):
   """checks to see if a float value is close to any floats in a given list
@@ -357,161 +582,155 @@ def close_to_any(a, floats):
   :returns: (bool) true if a is in floats, false if not"""
   return np.any(np.isclose(a, floats,rtol=1e-4))
 
-def generate_k(nkx=11,nky=11,nkz=8,max_kx=1,max_ky=1,dim=3):
-    """generate kpoints for Yaehmop such that they meet requirements of Z2pack.
-    Note that the maximum k-value in the z direction must be 1 so that 
-    k(t1,t2,0)=k(t1,t2,1)+G , where G is an inverse lattice vector
-    
-    :param nkx: (int) number of kpoints in x direction
-    
-    :param nky: (int) number of kpoints in y direction
-    
-    :param nkz: (int) number of kpoints in z direction
-    
-    :param max_kx: (float) max k value in x direction. must be from 0 to 1
-    
-    :param max_ky: (float) max k value in y direction. must be from 0 to 1
-    
-    :returns: (array) np.array of kpoints, (3 X nkx*nky*nkz)
-    """
-    
-    k_vect=[]
-    if dim==3:
-        kx=np.linspace(0,max_kx,nkx)
-        ky=np.linspace(0,max_ky,nky)
-        kz=np.linspace(0,1,nkz+1)[:-1]
-        for i in kx:
-            for j in ky:
-                for k in kz:
-                    k_vect.append([i,j,k])
-    if dim==2:
-        kx=np.linspace(0,max_kx,nkx)
-        ky=np.linspace(0,1,nky+1)[:-1]
-        for i in kx:
-            for j in ky:
-                k_vect.append([i,j])
-    
-    if dim==1:
-        kx=np.linspace(0,1,nkx+1)[:-1]               
-        for j in kx:
-            k_vect.append([j])
 
-                
-    return np.array(k_vect)
-
-def get_k_info(k_vect,dim=3):
-    """find max value of k in each direction. Also find number of different values
-    in each direction
     
-    :param k_vect: (array) kpoints array to get data from"""
-    kx=[]
-    ky=[]
-    kz=[]
-    for k in k_vect:
+def get_topology(filename,ham_type="eigval",surfaces="default",n=10):
+    """get topological invariants from data extracted from Yaehmop output file
+    works for 1D, 2D, 3D depending on len of k vector. 
+    1D -> [kx] , 2D -> [kx,ky] , 3D -> [kx,ky,kz]
+    
+    :param filename: (str) file to extract hamiltonians or eigenvalues
+        and corresponding kpoints from
         
-        if not close_to_any(k[0],kx):
-            kx.append(k[0])
-        if dim>=2:
-            if not close_to_any(k[1],ky):
-                ky.append(k[1])
-        if dim==3:
-            if not close_to_any(k[2],kz):
-                kz.append(k[2])
-    if dim==1:
-        return max(kx),len(kx)
-    if dim==2:
-        return max(kx),max(ky),len(kx),len(ky)
-    if dim==3:
-        return max(kx),max(ky),max(kz),len(kx),len(ky),len(kz)
+    :param ham_type: (str) construct diagonal hamiltonian from eigenvalues (default mode)
+        or extract full hamiltonian from Yaehmop output file.
+        
+    :param surfaces: (str) kpoint surfaces over which to calculate invariants. 
+        defaults are different in each dimension. Yaehmop output file contain these surfaces
+        
+    :param n: (int) number of kpoints in each direction. Yaehmop output file must match.
+         assumes number of points in each direction are the same, i.e. #kx=#ky=#kz
     
-
-
-def get_topology(filename):
-    """get chern number and z2 invariants of all surfaces from hamiltonains,kpoints
-    extracted from Yaehmop input file
-    
-    :param filename: (str) file to extract hamiltonians and corresponding kpoints from
-    
-    :returns: (list,list) chern number list, z2 invariant list of all surfaces"""
+    :returns: for 1D case, winding phase (float)
+             for 2D case, z2 invariant (int) and chern number (float or int)
+             for 3D case, 3D z2 invariant (list of ints, length = 4)
+             """
     
     #parse file to get all hamiltonians, kpoints and occupations
     
-    # bandDict = _parse_eigenvalues(filename)
-    # k_vect=bandDict["kpoints"]
-    # eig_vals_=bandDict["bands"]
-    # occupation=bandDict["occupation"]
-    # occ_bands=np.where(occupation[0,:]!=0)
-    # dim=len(k_vect[0,:])
-    # hamiltonian=ham_k(eig_vals_,k_vect)
+    if ham_type=="eigval":
+        bandDict = _parse_eigenvalues(filename)
+        k_vect=bandDict["kpoints"]
+        eig_vals_=bandDict["bands"]
+        occupation=bandDict["occupation"]
+        efermi=bandDict['efermi']
+        occ_bands=np.where(occupation[0,:]!=0)
+        dim=len(k_vect[0,:])
+        hamiltonian=ham_k_fromEigenvalues(eig_vals_,k_vect,efermi)
     
-    k_vect ,occupation,overlap_k, hamiltonian_data,dim=get_output_arrays(filename)
-    occ_bands=np.where(occupation[0,:]!=0)
-    hamiltonian=test_ham_k(hamiltonian_data,k_vect)
+    if ham_type=="general":
+        k_vect ,occupation,overlap_k, hamiltonian_data,dim=get_output_arrays(filename)
+        occ_bands=np.where(occupation[0,:]!=0)
+        hamiltonian=ham_k(hamiltonian_data,overlap_k,k_vect)
 
     #define hamiltonian, create z2pack system, run calculation
     system = z2pack.hm.System(hamiltonian,dim=dim,bands=occ_bands,convention=1)
     if dim==1:
-        maxkx,nkx=get_k_info(k_vect,dim=1)
+        maxkx,nkx=get_k_info(k_vect,dim=dim)
         result = z2pack.line.run(
             system=system,
             line= lambda t1: [t1], 
             pos_tol=None,
-            
-            
             iterator=range(nkx,40)
              )
         
     
-        chern_= result.pol #z2pack.invariant.chern(result)
-        z2_=None
-        return chern_, z2_
+        chern_= 2*result.pol 
+        z_=None
+        return chern_, z_
     
     if dim==2:
+        if surfaces=="default":
+            surfaces=np.array([(0,1),(0,1)])
         maxkx,maxky,nkx,nky=get_k_info(k_vect,dim=dim)
         result = z2pack.surface.run(
             system=system,
-            surface= lambda t1,t2: [maxkx*t1, t2], 
+            surface= lambda t1,t2: [surfaces[0,1]*t1, t2], 
             pos_tol=None,
+            gap_tol=None,
             move_tol=None,
-            num_lines=nkx , 
-            iterator=range(nky,40) )
+            num_lines=n , 
+            iterator=range(n,40) )
         
     
         chern_=z2pack.invariant.chern(result)
-        try:
-            z2_=z2pack.invariant.z2(result)
-        except:
-            z2_=None
+        z2_=z2pack.invariant.z2(result, check_kramers_pairs=False)
+
         return chern_, z2_
     
     if dim==3:
-        maxkx,maxky,maxkz,nkx,nky,nkz=get_k_info(k_vect,dim=dim)
-        result = z2pack.volume.run(
-            system=system,
-            volume= lambda t1,t2,t3: [maxkx*t1, maxky*t2, t3], 
-            pos_tol=None,
-            move_tol=None,
-            num_lines=nky ,
-            num_surfaces=nkx, 
-            iterator=range(nkz,40) )
+        if surfaces=="default":
+            surfaces=np.array([[(1,1),(0,1),(0,1)],
+                            [(0,1),(1,1),(0,1)],
+                            [(0,1),(0,1),(1,1)],
+                            [(0,0),(0,1),(0,1)],
+                            [(0,1),(0,0),(0,1)],
+                            [(0,1),(0,1),(0,0)],
+                            ])
+        z2_indices=z2_3d(system,n,surfaces)
+        c_=None
         
-    
-        chern_=get_All_ChernNumbers(result)
-        z2_= get_All_Z2(result)
-        return chern_, z2_
+        return c_, z2_indices
 
 
 if __name__=="__main__":
-    filename="mp-47.out"
     
-    # chern_, z2_ = get_topology(filename);
-    # print("chern numbers for all surfaces ",chern_)
-    # print("z2 invariants for all surfaces ", z2_)    
-    chern_, z2_ = get_topology("ssh_output.OUT")
-    print("chern number ",chern_, z2_)
+    ##########################################################################
     
-    # chern_, z2_ = get_topology("ssh_output.OUT")
-    # print("chern number ",chern_, z2_)
-    # # print("z2 invariants for all surfaces ", z2_)
+    # Verifications for 1D, 2D, 3D
     
+    ##########################################################################
+    
+    #1D verification
+    k_vect=generate_k_1D(nkx=10)
+    hamiltonian=haldane_model.ssh_hamiltonian(2,t1=-1.0)
+    haldane_model.write_yaehmop_output_from_ham("ssh_output.OUT",k_vect,hamiltonian)
+    c,z = get_topology("ssh_output.OUT",ham_type="general")
+    print("Winding number of SSH Model ", c)
+    
+    #2D verification, haldane model and 2D BHZ model
+    #-Haldane Model
+    m, t1, t2, phi=0.5, 1., 1. / 3., 0.5 * np.pi
+    k_vect=generate_k_2D()
+    fname="haldane_output.OUT"
+
+    ham=haldane_model.haldane_hamiltonian(m,t1,t2,phi)
+    haldane_model.write_yaehmop_output_from_ham(fname,k_vect,ham)
+    c, z = get_topology(fname,ham_type="general")
+    print("Chern number of Haldane Model ", c)
+    print("z2 invariant of Haldane Model ", z)
+    
+    #-2D BHZ model
+    surfaces=np.array([(0,1/2),(0,1)])
+    k_vect=generate_k_2D(n=10,surfaces=surfaces)
+    hamiltonian=haldane_model.bhz(0.5, 1., 0., 0., 1.)
+    haldane_model.write_yaehmop_output_from_ham("bhz_output.OUT",k_vect,hamiltonian)
+    c, z = get_topology("bhz_output.OUT",ham_type="general",surfaces=surfaces)
+    print("Chern number of 2D BHZ Model ", c)
+    print("z2 invariant of 2D BHZ Model ", z)
+
+    #3D verification, 3D BHZ model
+    bhz_edge_surfaces=np.array([[(1,1),(0,1/2),(0,1)],
+                            [(0,1/2),(1,1),(0,1)],
+                            [(0,1/2),(0,1),(1,1)],
+                            [(0,0),(0,1/2),(0,1)],
+                            [(0,1/2),(0,0),(0,1)],
+                            [(0,1/2),(0,1),(0,0)],
+                            ])
+    n=10
+    fname="bhz_output3d.OUT"
+    k_vect=generate_k_3D(n=n,surfaces=bhz_edge_surfaces)
+    ham=haldane_model.bhz_3D(.5, 1,0,0, 1.0) 
+    haldane_model.write_yaehmop_output_from_ham(fname,k_vect,ham)
+    c,z  = get_topology(fname,ham_type="general",surfaces=bhz_edge_surfaces,n=n)
+    #z[0]=strong invariant index
+    #z[1:]=weak invariant indices
+    print("3D z2 invariant for 3D BHZ model ", z)
+
+    
+    #try calculation on sample Yaehmop file
+    c, z2_ = get_topology("C:/Users/danpa/Downloads/22.out")
+    #note: kpoints in z2pack and this Yaehmop output file likely do not match up  
+    #in this case, so will not produce a reliable result. just shows that interface works
+    print("3D z2 invariant ", z2_)
     
