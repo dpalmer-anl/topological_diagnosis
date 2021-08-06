@@ -21,7 +21,12 @@ import haldane_model
 
 def change_basis(basis_a,basis_b):
     """change array a into basis from array b
-    returns change of basis array """
+    returns change of basis array 
+    :param basis_a: (array) basis of array a
+    
+    :param basis_b: (array) basis of array b
+    
+    :returns U: (array) change of basis array from a to b """
     u=adjoint(basis_a) @ basis_b
     return u
 
@@ -57,7 +62,15 @@ def extract_floats(array,is_real=True):
     return new_array
             
 def get_overlap(index,read_obj,num_orbitals):
-    """extracts overlap matrix for single k value from output file """
+    """extracts overlap matrix for single k value from output file 
+    
+    :param index: (int) index in file corresponding to line where overlap matrix starts
+    
+    :param read_obj: (obj) python file object of output file
+    
+    :param num_orbitals: (int) number of orbitals. sets dimensions of overlap matrix
+    
+    :returns: (array) overlap matrix dimension (num_orbitals, num_orbitals)"""
     overlap=[]
     first_line=index
     first_line_reached=False
@@ -79,7 +92,16 @@ def get_overlap(index,read_obj,num_orbitals):
     return overlap
 
 def get_ham(index,read_obj,num_orbitals):
-    """extracts hamiltonian matrix for single k value from output file """
+    """extracts hamiltonian matrix for single k value from output file 
+    
+    :param index: (int) index in file corresponding to line where hamiltonian starts
+    
+    :param read_obj: (obj) python file object of output file
+    
+    :param num_orbitals: (int) number of orbitals. sets dimensions of hamiltonian
+    
+    :returns: (array) hamiltonian, dimension (num_orbitals, num_orbitals)"""
+    
     h=[]
     first_line=index+2
     first_line_reached=False
@@ -97,7 +119,15 @@ def get_ham(index,read_obj,num_orbitals):
     return h
 
 def get_occ(index,read_obj,num_orbitals):
-    """extracts occupation for single k value from output file """
+    """extracts occupation for single k value from output file 
+    :param index: (int) index in file corresponding to line where occupations start
+    
+    :param read_obj: (obj) python file object of output file
+    
+    :param num_orbitals: (int) number of orbitals. sets dimensions of occupations
+    
+    :returns: (array) occupations, dimension (num_orbitals,)"""
+    
     occ=[]
     first_line=index
     first_line_reached=False
@@ -118,7 +148,12 @@ def get_occ(index,read_obj,num_orbitals):
 
 def get_k(line):
     """get an array of k vectors from Yaehmop output file
-    each row is a new k vector. number of rows = number of k vectors"""
+    each row is a new k vector. number of rows = number of k vectors
+    
+    :param line: (str) line where k vector is stored
+    
+    :returns: (array) array of k vector"""
+    
     ind_left=line.find("(")
     ind_right=line.find(")")
     array=line[ind_left+1:ind_right]
@@ -133,18 +168,29 @@ def get_k(line):
     return np.array(k)
 
 def get_num_orbitals(line):
-    """extracts number of orbitals from output file """
+    """extracts number of orbitals from output file 
+    
+    :param line: (str) line where number of orbitals is stored
+    
+    :returns: (int) number of orbitals"""
+    
     ind_left=line.find(":")
     num=line[ind_left+1:]
     return int(num)
 
 def get_dim(line):
-    """extracts number of dimensions from output file """
+    """extracts number of dimensions from output file 
+    
+    :param line: (str) line where number of orbitals is stored
+    
+    :returns: (int) dimensionality"""
+    
     ind_left=line.find(":")
     num=line[ind_left+1:]
     return int(num)
 
 def get_k_vect(filename):
+    """get kpoints from materials project """
     if not os.path.exists("kpoints"):
         from pymatgen.ext.matproj import MPRester
         mpid=(filename.split("/")[-1]).split(".")[0]
@@ -165,7 +211,17 @@ def get_k_vect(filename):
     
 def get_output_arrays(filename):
     """parses yaehmop output file to get kpoints, occupation, overlap as a function of k
-    hamiltonian as a function of k, and number of dimensions"""
+    hamiltonian as a function of k, and number of dimensions
+    
+    :param filename: (str) filename to parse
+    
+    :returns:
+        kpoints: array (number of kpoints, dimensions)
+        occupation: array (number of kpoints, number of orbitals)
+        overlap matrices: array (number of kpoints, number of orbitals, number of orbitals)
+        hamiltonians: array (number of kpoints, number of orbitals, number of orbitals)
+        dimensions: int
+        """
     k_vect = np.array([0,0,0])
     overlap_k=[]
     ham_k=[]
@@ -490,31 +546,6 @@ def ham_k_fromEigenvalues(eigVal_data,k_vect,efermi):
     
     return h_k
 
-def get_All_ChernNumbers(volume_result):
-    """get all chern numbers of surfaces stored in a volume result. 
-    
-    :param volume_result: (obj) z2pack.volume.VolumeResult object
-    
-    :returns: (list) list of chern numbers for all surfaces"""
-    
-    surfaces=volume_result.surfaces
-    chern_=[]
-    for surf in surfaces:
-        chern_.append(z2pack.invariant.chern(surf))
-    return chern_
-
-def get_All_Z2(volume_result):
-    """get all z2 invariants of surfaces stored in a volume result. 
-    
-    :param volume_result: (obj) z2pack.volume.VolumeResult object
-    
-    :returns: (list) list of z2 invariants for all surfaces"""
-    
-    surfaces=volume_result.surfaces
-    z2_=[]
-    for surf in surfaces:
-        z2_.append(z2pack.invariant.z2(surf))
-    return z2_
 
 def z2_3d(system,n,surfaces):
     """calculate 3D z2 invariant of a given z2pack system
@@ -524,7 +555,9 @@ def z2_3d(system,n,surfaces):
     :param surfaces: (array) surfaces to calculate 2D z2 invariant over
         dimension= (6,3,2)
     
-    :param n: (int) number of kpoints in each direction"""
+    :param n: (int) number of kpoints in each direction
+    
+    :returns z2 indices: (list) 3D z2 invariant indices, length = 4 """
     
     z2_indices=np.zeros(4)
     surfaces=np.array(surfaces)
