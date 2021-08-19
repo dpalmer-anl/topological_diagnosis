@@ -668,9 +668,9 @@ def get_topology(filename,ham_type="eigval",surfaces="default",n=10):
              )
         
     
-        chern_= 2*result.pol 
+        winding_= result.pol 
         z_=None
-        return chern_, z_
+        return winding_, z_
     
     if dim==2:
         if surfaces=="default":
